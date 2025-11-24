@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 uni_routing = { path = "../../", features = ["axum", "swagger", "jwt"] }
+uni_routing_macros = { path = "../../uni_routing_macros" }
 axum = "0.7"
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

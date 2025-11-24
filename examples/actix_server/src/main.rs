@@ -1,8 +1,8 @@
+//! Actix-web服务器示例 - 展示 uni_routing 宏的使用
 
-//! Actix-web服务器示例
-
-use actix_web::{get, post, web, App, HttpServer, HttpResponse, Result as ActixResult};
+use actix_web::{get, web, App, HttpServer, HttpResponse, Result as ActixResult};
 use serde::{Deserialize, Serialize};
+use uni_routing_macros::uni_routing;
 use uni_routing::middleware::{MiddlewareChain, AuthMiddleware, LoggingMiddleware, CorsMiddleware};
 use uni_routing::auth::AuthPolicy;
 use std::sync::Arc;
@@ -20,8 +20,12 @@ struct CreateUserRequest {
     email: String,
 }
 
-// 健康检查端点（无需认证）
-#[get("/api/health")]
+// 使用 uni_routing 宏定义健康检查端点（无需认证）
+#[uni_routing(
+    route = "/api/health",
+    method = "GET",
+    description = "健康检查端点，检查服务器运行状态"
+)]
 async fn health_check() -> ActixResult<HttpResponse> {
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "healthy",
@@ -29,8 +33,13 @@ async fn health_check() -> ActixResult<HttpResponse> {
     })))
 }
 
-// 获取用户列表端点
-#[get("/api/users")]
+// 使用 uni_routing 宏定义获取用户列表端点（需要管理员权限）
+#[uni_routing(
+    route = "/api/users",
+    method = "GET",
+    auth_policy = "role:admin,permission:users.read",
+    description = "获取所有用户列表，需要管理员权限和用户读取权限"
+)]
 async fn get_users() -> ActixResult<HttpResponse> {
     let users = vec![
         User { id: 1, name: "Alice".to_string(), email: "alice@example.com".to_string() },
@@ -41,8 +50,13 @@ async fn get_users() -> ActixResult<HttpResponse> {
     Ok(HttpResponse::Ok().json(users))
 }
 
-// 创建用户端点
-#[post("/api/users")]
+// 使用 uni_routing 宏定义创建用户端点（需要用户管理权限）
+#[uni_routing(
+    route = "/api/users",
+    method = "POST",
+    auth_policy = "role:admin,permission:users.write",
+    description = "创建新用户，需要管理员权限和用户写入权限"
+)]
 async fn create_user(
     user_data: web::Json<CreateUserRequest>
 ) -> ActixResult<HttpResponse> {
@@ -53,6 +67,67 @@ async fn create_user(
     };
     
     Ok(HttpResponse::Created().json(new_user))
+}
+
+// 使用 uni_routing 宏定义获取单个用户端点
+#[uni_routing(
+    route = "/api/users/{id}",
+    method = "GET",
+    auth_policy = "role:admin,permission:users.read",
+    description = "根据ID获取特定用户信息"
+)]
+async fn get_user_by_id(
+    path: web::Path<u64>
+) -> ActixResult<HttpResponse> {
+    let user_id = path.into_inner();
+    
+    // 模拟数据库查询
+    let user = User {
+        id: user_id,
+        name: format!("User {}", user_id),
+        email: format!("user{}@example.com", user_id),
+    };
+    
+    Ok(HttpResponse::Ok().json(user))
+}
+
+// 使用 uni_routing 宏定义更新用户端点
+#[uni_routing(
+    route = "/api/users/{id}",
+    method = "PUT",
+    auth_policy = "role:admin,permission:users.write",
+    description = "更新指定ID的用户信息"
+)]
+async fn update_user(
+    path: web::Path<u64>,
+    user_data: web::Json<CreateUserRequest>
+) -> ActixResult<HttpResponse> {
+    let user_id = path.into_inner();
+    
+    let updated_user = User {
+        id: user_id,
+        name: user_data.name.clone(),
+        email: user_data.email.clone(),
+    };
+    
+    Ok(HttpResponse::Ok().json(updated_user))
+}
+
+// 使用 uni_routing 宏定义删除用户端点
+#[uni_routing(
+    route = "/api/users/{id}",
+    method = "DELETE",
+    auth_policy = "role:admin,permission:users.delete",
+    description = "删除指定ID的用户"
+)]
+async fn delete_user(
+    path: web::Path<u64>
+) -> ActixResult<HttpResponse> {
+    let user_id = path.into_inner();
+    
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "message": format!("User {} deleted successfully", user_id)
+    })))
 }
 
 // Swagger文档端点
@@ -90,13 +165,13 @@ async fn openapi_spec() -> ActixResult<HttpResponse> {
         "info": {
             "title": "Uni Routing API",
             "version": "1.0.0",
-            "description": "API documentation for Uni Routing framework"
+            "description": "API documentation for Uni Routing framework with uni_routing macro"
         },
         "paths": {
             "/api/health": {
                 "get": {
                     "summary": "Health check",
-                    "description": "Check if the server is running",
+                    "description": "健康检查端点，检查服务器运行状态",
                     "responses": {
                         "200": {
                             "description": "Server is healthy"
@@ -104,10 +179,12 @@ async fn openapi_spec() -> ActixResult<HttpResponse> {
                     }
                 }
             },
+            
             "/api/users": {
                 "get": {
                     "summary": "Get all users",
-                    "description": "Retrieve a list of all users",
+                    "description": "获取所有用户列表，需要管理员权限和用户读取权限",
+                    "security": [{"bearerAuth": []}],
                     "responses": {
                         "200": {
                             "description": "List of users"
@@ -116,7 +193,8 @@ async fn openapi_spec() -> ActixResult<HttpResponse> {
                 },
                 "post": {
                     "summary": "Create a new user",
-                    "description": "Create a new user with the provided data",
+                    "description": "创建新用户，需要管理员权限和用户写入权限",
+                    "security": [{"bearerAuth": []}],
                     "requestBody": {
                         "required": true,
                         "content": {
@@ -136,6 +214,48 @@ async fn openapi_spec() -> ActixResult<HttpResponse> {
                             "description": "User created successfully"
                         }
                     }
+                }
+            },
+            
+            "/api/users/{id}": {
+                "get": {
+                    "summary": "Get user by ID",
+                    "description": "根据ID获取特定用户信息",
+                    "security": [{"bearerAuth": []}],
+                    "responses": {
+                        "200": {
+                            "description": "User details"
+                        }
+                    }
+                },
+                "put": {
+                    "summary": "Update user",
+                    "description": "更新指定ID的用户信息",
+                    "security": [{"bearerAuth": []}],
+                    "responses": {
+                        "200": {
+                            "description": "User updated successfully"
+                        }
+                    }
+                },
+                "delete": {
+                    "summary": "Delete user",
+                    "description": "删除指定ID的用户",
+                    "security": [{"bearerAuth": []}],
+                    "responses": {
+                        "200": {
+                            "description": "User deleted successfully"
+                        }
+                    }
+                }
+            }
+        },
+        "components": {
+            "securitySchemes": {
+                "bearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "JWT"
                 }
             }
         }
@@ -160,23 +280,49 @@ async fn main() -> std::io::Result<()> {
     println!("✅ Middleware chain configured");
     println!("🌐 Server starting on http://localhost:8080");
     println!();
-    println!("📖 Available endpoints:");
-    println!("  GET  http://localhost:8080/api/health      - Health check (no auth)");
-    println!("  GET  http://localhost:8080/api/users       - Get all users");
-    println!("  POST http://localhost:8080/api/users       - Create user");
-    println!("  GET  http://localhost:8080/swagger         - Swagger UI");
-    println!("  GET  http://localhost:8080/swagger/openapi.json - OpenAPI spec");
+    println!("📖 Available endpoints (using uni_routing macro):");
+    println!("  GET    http://localhost:8080/api/health           - Health check (no auth)");
+    println!("  GET    http://localhost:8080/api/users            - Get all users (admin:read)");
+    println!("  POST   http://localhost:8080/api/users            - Create user (admin:write)");
+    println!("  GET    http://localhost:8080/api/users/123        - Get user by ID (admin:read)");
+    println!("  PUT    http://localhost:8080/api/users/123        - Update user (admin:write)");
+    println!("  DELETE http://localhost:8080/api/users/123        - Delete user (admin:delete)");
+    println!("  GET    http://localhost:8080/swagger              - Swagger UI");
+    println!("  GET    http://localhost:8080/swagger/openapi.json  - OpenAPI spec");
     println!();
     println!("🧪 Try these commands:");
     println!("  curl -X GET http://localhost:8080/api/health");
     println!("  curl -X GET http://localhost:8080/api/users");
     println!("  curl -X POST http://localhost:8080/api/users -H 'Content-Type: application/json' -d '{{\"name\":\"Test User\",\"email\":\"test@example.com\"}}'");
+    println!("  curl -X GET http://localhost:8080/api/users/123");
+    println!("  curl -X PUT http://localhost:8080/api/users/123 -H 'Content-Type: application/json' -d '{{\"name\":\"Updated User\",\"email\":\"updated@example.com\"}}'");
+    println!("  curl -X DELETE http://localhost:8080/api/users/123");
+    println!();
+    println!("📝 Note: The uni_routing macro provides route metadata and authentication");
+    println!("   configuration, but the actual routing is handled by Actix-web's native system.");
+    
+    // 注意：由于 uni_routing 宏生成的函数不能直接用于 Actix-web 的 service 方法，
+    // 这里我们使用 Actix-web 的原生注解来注册路由，同时展示 uni_routing 宏的配置。
+    // 在实际应用中，可以创建一个适配器来自动处理这种转换。
     
     HttpServer::new(|| {
         App::new()
-            .service(health_check)
-            .service(get_users)
-            .service(create_user)
+            // 使用 Actix-web 原生路由注册，但展示了 uni_routing 宏的配置
+            .service(
+                web::resource("/api/health")
+                    .route(web::get().to(health_check))
+            )
+            .service(
+                web::resource("/api/users")
+                    .route(web::get().to(get_users))
+                    .route(web::post().to(create_user))
+            )
+            .service(
+                web::resource("/api/users/{id}")
+                    .route(web::get().to(get_user_by_id))
+                    .route(web::put().to(update_user))
+                    .route(web::delete().to(delete_user))
+            )
             .service(swagger_ui)
             .service(openapi_spec)
     })
