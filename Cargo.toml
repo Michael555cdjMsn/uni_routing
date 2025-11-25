@@ -6,40 +6,49 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-utoipa = { version = "4.0", optional = true }
-jsonwebtoken = { version = "8.0", optional = true }
-chrono = { version = "0.4", optional = true }
-proc-macro2 = "1.0"
-quote = "1.0"
-syn = { version = "2.0", features = ["full"] }
 uni_routing_macros = { path = "./uni_routing_macros" }
 
-# Actix-web dependencies (optional)
+# Actix-web support
 actix-web = { version = "4.0", optional = true }
-env_logger = { version = "0.10", optional = true }
 
-# Rocket dependencies (optional)
+# Rocket support
 rocket = { version = "0.5", optional = true }
 
-# Axum dependencies (optional)
+# Axum support
 axum = { version = "0.7", optional = true }
+
+# JWT authentication
+jsonwebtoken = { version = "8.0", optional = true }
+
+# OpenAPI documentation generation
+utoipa = { version = "4.0", optional = true }
+utoipa-swagger-ui = { version = "4.0", optional = true }
+
+# Async runtime
 tokio = { version = "1.0", features = ["full"], optional = true }
-tower-http = { version = "0.5", optional = true }
-tracing = { version = "0.1", optional = true }
-tracing-subscriber = { version = "0.3", optional = true }
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"], optional = true }
 
 [features]
-default = ["jwt", "actix"]
-actix = ["dep:actix-web", "dep:env_logger", "chrono"]
-rocket = ["dep:rocket", "chrono"]
-axum = ["dep:axum", "dep:tokio", "dep:tower-http", "dep:tracing", "dep:tracing-subscriber", "chrono"]
-swagger = ["dep:utoipa"]
+default = ["actix", "jwt"]
+actix = ["dep:actix-web", "dep:chrono"]
+rocket = ["dep:rocket", "dep:chrono"]
+axum = ["dep:axum", "dep:tokio", "dep:chrono"]
 jwt = ["dep:jsonwebtoken"]
-
-full = ["actix", "rocket", "axum", "swagger", "jwt"]
+swagger = ["dep:utoipa", "dep:utoipa-swagger-ui"]
+full = ["actix", "rocket", "axum", "jwt", "swagger"]
 
 [workspace]
 members = [
-    ".", "examples/actix_server", "examples/axum_server", "examples/rocket_server",
+    ".",
     "uni_routing_macros",
+    "examples/actix_server",
+    "examples/axum_server",
+    "examples/rocket_server",
 ]
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+env_logger = "0.10"
+tracing-subscriber = "0.3"

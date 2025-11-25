@@ -1,13 +1,17 @@
 //! Actix-web服务器示例 - 展示 uni_routing 宏的使用
 
-use actix_web::{get, web, App, HttpServer, HttpResponse, Result as ActixResult};
+use actix_web::{web, App, HttpServer, HttpResponse, Result as ActixResult};
 use serde::{Deserialize, Serialize};
 use uni_routing_macros::uni_routing;
 use uni_routing::middleware::{MiddlewareChain, AuthMiddleware, LoggingMiddleware, CorsMiddleware};
 use uni_routing::auth::AuthPolicy;
 use std::sync::Arc;
 
+#[cfg(feature = "swagger")]
+use utoipa::OpenApi;
+
 #[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
 struct User {
     id: u64,
     name: String,
@@ -15,12 +19,20 @@ struct User {
 }
 
 #[derive(Deserialize)]
+#[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
 struct CreateUserRequest {
     name: String,
     email: String,
 }
 
 // 使用 uni_routing 宏定义健康检查端点（无需认证）
+#[cfg_attr(feature = "swagger", utoipa::path(
+    get,
+    path = "/api/health",
+    responses(
+        (status = 200, description = "服务器健康状态")
+    )
+))]
 #[uni_routing(
     route = "/api/health",
     method = "GET",
@@ -34,6 +46,16 @@ async fn health_check() -> ActixResult<HttpResponse> {
 }
 
 // 使用 uni_routing 宏定义获取用户列表端点（需要管理员权限）
+#[cfg_attr(feature = "swagger", utoipa::path(
+    get,
+    path = "/api/users",
+    responses(
+        (status = 200, description = "用户列表", body = [User])
+    ),
+    security(
+        ("bearerAuth" = [])
+    )
+))]
 #[uni_routing(
     route = "/api/users",
     method = "GET",
@@ -51,6 +73,17 @@ async fn get_users() -> ActixResult<HttpResponse> {
 }
 
 // 使用 uni_routing 宏定义创建用户端点（需要用户管理权限）
+#[cfg_attr(feature = "swagger", utoipa::path(
+    post,
+    path = "/api/users",
+    request_body = CreateUserRequest,
+    responses(
+        (status = 201, description = "创建的用户", body = User)
+    ),
+    security(
+        ("bearerAuth" = [])
+    )
+))]
 #[uni_routing(
     route = "/api/users",
     method = "POST",
@@ -70,6 +103,19 @@ async fn create_user(
 }
 
 // 使用 uni_routing 宏定义获取单个用户端点
+#[cfg_attr(feature = "swagger", utoipa::path(
+    get,
+    path = "/api/users/{id}",
+    responses(
+        (status = 200, description = "特定用户信息", body = User)
+    ),
+    params(
+        ("id" = u64, Path, description = "用户ID")
+    ),
+    security(
+        ("bearerAuth" = [])
+    )
+))]
 #[uni_routing(
     route = "/api/users/{id}",
     method = "GET",
@@ -92,6 +138,20 @@ async fn get_user_by_id(
 }
 
 // 使用 uni_routing 宏定义更新用户端点
+#[cfg_attr(feature = "swagger", utoipa::path(
+    put,
+    path = "/api/users/{id}",
+    request_body = CreateUserRequest,
+    responses(
+        (status = 200, description = "更新的用户", body = User)
+    ),
+    params(
+        ("id" = u64, Path, description = "用户ID")
+    ),
+    security(
+        ("bearerAuth" = [])
+    )
+))]
 #[uni_routing(
     route = "/api/users/{id}",
     method = "PUT",
@@ -114,6 +174,19 @@ async fn update_user(
 }
 
 // 使用 uni_routing 宏定义删除用户端点
+#[cfg_attr(feature = "swagger", utoipa::path(
+    delete,
+    path = "/api/users/{id}",
+    responses(
+        (status = 200, description = "用户删除成功")
+    ),
+    params(
+        ("id" = u64, Path, description = "用户ID")
+    ),
+    security(
+        ("bearerAuth" = [])
+    )
+))]
 #[uni_routing(
     route = "/api/users/{id}",
     method = "DELETE",
@@ -130,8 +203,29 @@ async fn delete_user(
     })))
 }
 
-// Swagger文档端点
-#[get("/swagger")]
+#[cfg(feature = "swagger")]
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        health_check,
+        get_users,
+        create_user,
+        get_user_by_id,
+        update_user,
+        delete_user,
+    ),
+    components(schemas(User, CreateUserRequest)),
+    tags(
+        (name = "users", description = "用户管理端点")
+    ),
+    security(
+        ("bearerAuth" = [])
+    )
+)]
+struct ApiDoc;
+
+#[cfg(feature = "swagger")]
+#[actix_web::get("/swagger")]
 async fn swagger_ui() -> ActixResult<HttpResponse> {
     let html = r#"
 <!DOCTYPE html>
@@ -158,110 +252,13 @@ async fn swagger_ui() -> ActixResult<HttpResponse> {
         .body(html))
 }
 
-#[get("/swagger/openapi.json")]
+#[cfg(feature = "swagger")]
+#[actix_web::get("/swagger/openapi.json")]
 async fn openapi_spec() -> ActixResult<HttpResponse> {
-    let spec = serde_json::json!({
-        "openapi": "3.0.0",
-        "info": {
-            "title": "Uni Routing API",
-            "version": "1.0.0",
-            "description": "API documentation for Uni Routing framework with uni_routing macro"
-        },
-        "paths": {
-            "/api/health": {
-                "get": {
-                    "summary": "Health check",
-                    "description": "健康检查端点，检查服务器运行状态",
-                    "responses": {
-                        "200": {
-                            "description": "Server is healthy"
-                        }
-                    }
-                }
-            },
-            
-            "/api/users": {
-                "get": {
-                    "summary": "Get all users",
-                    "description": "获取所有用户列表，需要管理员权限和用户读取权限",
-                    "security": [{"bearerAuth": []}],
-                    "responses": {
-                        "200": {
-                            "description": "List of users"
-                        }
-                    }
-                },
-                "post": {
-                    "summary": "Create a new user",
-                    "description": "创建新用户，需要管理员权限和用户写入权限",
-                    "security": [{"bearerAuth": []}],
-                    "requestBody": {
-                        "required": true,
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": {"type": "string"},
-                                        "email": {"type": "string"}
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "responses": {
-                        "201": {
-                            "description": "User created successfully"
-                        }
-                    }
-                }
-            },
-            
-            "/api/users/{id}": {
-                "get": {
-                    "summary": "Get user by ID",
-                    "description": "根据ID获取特定用户信息",
-                    "security": [{"bearerAuth": []}],
-                    "responses": {
-                        "200": {
-                            "description": "User details"
-                        }
-                    }
-                },
-                "put": {
-                    "summary": "Update user",
-                    "description": "更新指定ID的用户信息",
-                    "security": [{"bearerAuth": []}],
-                    "responses": {
-                        "200": {
-                            "description": "User updated successfully"
-                        }
-                    }
-                },
-                "delete": {
-                    "summary": "Delete user",
-                    "description": "删除指定ID的用户",
-                    "security": [{"bearerAuth": []}],
-                    "responses": {
-                        "200": {
-                            "description": "User deleted successfully"
-                        }
-                    }
-                }
-            }
-        },
-        "components": {
-            "securitySchemes": {
-                "bearerAuth": {
-                    "type": "http",
-                    "scheme": "bearer",
-                    "bearerFormat": "JWT"
-                }
-            }
-        }
-    });
-    
-    Ok(HttpResponse::Ok().json(spec))
+    let spec = ApiDoc::openapi().to_json().unwrap();
+    Ok(HttpResponse::Ok()
+        .content_type("application/json")
+        .body(spec))
 }
 
 #[actix_web::main]
@@ -287,15 +284,19 @@ async fn main() -> std::io::Result<()> {
     println!("  GET    http://localhost:8080/api/users/123        - Get user by ID (admin:read)");
     println!("  PUT    http://localhost:8080/api/users/123        - Update user (admin:write)");
     println!("  DELETE http://localhost:8080/api/users/123        - Delete user (admin:delete)");
+    
+    #[cfg(feature = "swagger")]
     println!("  GET    http://localhost:8080/swagger              - Swagger UI");
+    #[cfg(feature = "swagger")]
     println!("  GET    http://localhost:8080/swagger/openapi.json  - OpenAPI spec");
+    
     println!();
     println!("🧪 Try these commands:");
     println!("  curl -X GET http://localhost:8080/api/health");
     println!("  curl -X GET http://localhost:8080/api/users");
-    println!("  curl -X POST http://localhost:8080/api/users -H 'Content-Type: application/json' -d '{{\"name\":\"Test User\",\"email\":\"test@example.com\"}}'");
+    println!("  curl -X POST http://localhost:8080/api/users -H 'Content-Type: application/json' -d '{\"name\":\"Test User\",\"email\":\"test@example.com\"}'");
     println!("  curl -X GET http://localhost:8080/api/users/123");
-    println!("  curl -X PUT http://localhost:8080/api/users/123 -H 'Content-Type: application/json' -d '{{\"name\":\"Updated User\",\"email\":\"updated@example.com\"}}'");
+    println!("  curl -X PUT http://localhost:8080/api/users/123 -H 'Content-Type: application/json' -d '{\"name\":\"Updated User\",\"email\":\"updated@example.com\"}'");
     println!("  curl -X DELETE http://localhost:8080/api/users/123");
     println!();
     println!("📝 Note: The uni_routing macro provides route metadata and authentication");
@@ -306,7 +307,8 @@ async fn main() -> std::io::Result<()> {
     // 在实际应用中，可以创建一个适配器来自动处理这种转换。
     
     HttpServer::new(|| {
-        App::new()
+        #[cfg(feature = "swagger")]
+        let app = App::new()
             // 使用 Actix-web 原生路由注册，但展示了 uni_routing 宏的配置
             .service(
                 web::resource("/api/health")
@@ -324,7 +326,28 @@ async fn main() -> std::io::Result<()> {
                     .route(web::delete().to(delete_user))
             )
             .service(swagger_ui)
-            .service(openapi_spec)
+            .service(openapi_spec);
+        
+        #[cfg(not(feature = "swagger"))]
+        let app = App::new()
+            // 使用 Actix-web 原生路由注册，但展示了 uni_routing 宏的配置
+            .service(
+                web::resource("/api/health")
+                    .route(web::get().to(health_check))
+            )
+            .service(
+                web::resource("/api/users")
+                    .route(web::get().to(get_users))
+                    .route(web::post().to(create_user))
+            )
+            .service(
+                web::resource("/api/users/{id}")
+                    .route(web::get().to(get_user_by_id))
+                    .route(web::put().to(update_user))
+                    .route(web::delete().to(delete_user))
+            );
+            
+        app
     })
     .bind("127.0.0.1:8080")?
     .run()

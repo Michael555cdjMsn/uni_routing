@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-uni_routing = { path = "../../", features = ["rocket", "swagger", "jwt"] }
+uni_routing = { path = "../..", features = ["rocket", "jwt", "swagger"] }
 uni_routing_macros = { path = "../../uni_routing_macros" }
 rocket = { version = "0.5", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 env_logger = "0.10"
+utoipa = "4.0"
+utoipa-swagger-ui = "4.0"
