@@ -9,10 +9,16 @@ pub mod routing;
 pub mod auth;
 /// 中间件模块
 pub mod middleware;
+/// 路由注册模块
+pub mod registry;
 
 #[cfg(feature = "swagger")]
 /// OpenAPI 文档生成模块
 pub mod swagger;
+
+/// 框架特定的路由注册器
+#[cfg(any(feature = "actix", feature = "axum", feature = "rocket"))]
+pub mod frameworks;
 
 /// 重新导出常用的类型
 pub use serde::{Deserialize, Serialize};

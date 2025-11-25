@@ -17,7 +17,7 @@ pub struct RouteInfo {
 }
 
 /// HTTP方法枚举
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum HttpMethod {
     GET,
     POST,

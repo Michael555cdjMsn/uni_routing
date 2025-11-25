@@ -5,21 +5,7 @@ use quote::quote;
 use syn::parse_macro_input;
 use syn::ItemFn;
 
-/// uni_routing属性宏，用于简化路由配置
-///
-/// # 示例
-///
-/// ```rust
-/// #[uni_routing(
-///     route = "/api/users",
-///     method = "GET",
-///     auth_policy = "roles:admins,users",
-///     description = "获取所有用户"
-/// )]
-/// async fn get_users() -> Result<Json<Vec<User>>, Error> {
-///     // 函数实现
-/// }
-/// ```
+/// uni_routing属性宏，用于简化路由配置并自动注册
 #[proc_macro_attribute]
 pub fn uni_routing(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(input as ItemFn);
@@ -41,7 +27,7 @@ pub fn uni_routing(args: TokenStream, input: TokenStream) -> TokenStream {
         let pair = pair.trim();
         if let Some((key, value)) = pair.split_once('=') {
             let key = key.trim();
-            let value = value.trim().trim_matches('"');
+            let value = value.trim().trim_matches('\"');
             
             match key {
                 "route" => route = Some(value.to_string()),
@@ -53,8 +39,6 @@ pub fn uni_routing(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
     
-    // 生成路由信息常量
-    let _route_info_name = syn::Ident::new(&format!("__ROUTE_INFO_{}", fn_name), fn_name.span());
     let route_lit = route.unwrap_or_else(|| "/".to_string());
     let method_lit = method.unwrap_or_else(|| "GET".to_string());
     let auth_policy_lit = auth_policy.unwrap_or_else(|| String::new());
@@ -94,21 +78,6 @@ pub fn uni_routing(args: TokenStream, input: TokenStream) -> TokenStream {
                     Some(#description_lit.to_string()) 
                 },
             }
-        }
-    };
-    
-    TokenStream::from(expanded)
-}
-
-/// 用于生成路由收集器的宏
-#[proc_macro]
-pub fn collect_routes(_input: TokenStream) -> TokenStream {
-    let expanded = quote! {
-        /// 收集所有使用uni_routing宏定义的路由
-        pub fn collect_all_routes() -> Vec<uni_routing::routing::RouteInfo> {
-            // 在实际实现中，这里会从link_section中读取所有路由信息
-            // 目前返回空向量作为占位符
-            vec![]
         }
     };
     
